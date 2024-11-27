@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package eventura;
+
+option go_package = "./pb";
+
+message Metadata {
+  string content_type = 1;
+  map<string, string> map = 2;
+}
+
+message Event {
+  uint64 id = 1;
+  string category = 2;
+  string type = 3;
+  bytes payload = 4;
+  int64 timestamp = 5;
+  Metadata metadata = 6;
+}
+
+message AppendEventRequest {
+  string category = 1;
+  string event_type = 2;
+  bytes payload = 3;
+  Metadata metadata = 4;
+}
+
+message AppendEventResponse {
+  uint64 event_id = 1;
+}
+
+message ReadByCategoryRequest {
+  string category = 1;
+  uint64 from_event_id = 2;
+}
+
+message ReadByEventTypeRequest {
+  string event_type = 1;
+  uint64 from_event_id = 2;
+}
+
+message ReadBySubjectRequest {
+  string subject = 1;
+  uint64 from_event_id = 2;
+}
+
+message ReadAllRequest {
+  uint64 from_event_id = 1;
+}
+
+message ReadStreamResponse {
+  repeated Event events = 1;
+}
+
+message GetEventRequest {
+  uint64 event_id = 1;
+}
+
+message GetEventResponse {
+  Event event = 1;
+}
+
+service EventService {
+  rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
+  rpc ReadEvent(GetEventRequest) returns (GetEventResponse);
+  rpc ReadByCategory(ReadByCategoryRequest) returns (ReadStreamResponse);
+  rpc ReadByEventType(ReadByEventTypeRequest) returns (ReadStreamResponse);
+  rpc ReadBySubject(ReadBySubjectRequest) returns (ReadStreamResponse);
+  rpc ReadAll(ReadAllRequest) returns (ReadStreamResponse);
+}
