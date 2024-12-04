@@ -2,6 +2,8 @@ package subscription
 
 import (
 	"encoding/json"
+	"errors"
+	"eventura/modules/pubsub/types"
 	"fmt"
 	"github.com/cockroachdb/pebble"
 	"go.uber.org/zap"
@@ -63,15 +65,20 @@ func (r *SubscriptionRepository) Exists(consumerId string, topic string) bool {
 	return data != nil
 }
 
-// Find subscription by consumerId and topic
-func (r *SubscriptionRepository) Find(consumerId string, topic string) (*SubscriptionRecord, error) {
+// Read subscription by consumerId and topic
+func (r *SubscriptionRepository) Read(consumerId string, topic string) (*SubscriptionRecord, error) {
 	key := SubscriptionDBKey{
 		ConsumerID: consumerId,
 		Topic:      topic,
 	}
 
 	data, closer, err := r.db.Get(key.Key())
+
 	if err != nil {
+		if errors.Is(err, pebble.ErrNotFound) {
+			return nil, types.NewNotFoundError("key not found in DB", err)
+		}
+
 		return nil, err
 	}
 	defer closer.Close()
@@ -123,6 +130,8 @@ func (r *SubscriptionRepository) UpdateOffset(consumerId string, topic string, o
 		ConsumerID: consumerId,
 		Offset:     offset,
 	}
+
+	r.log.Info("Updating offset", zap.String("consumer_id", consumerId), zap.String("topic", topic), zap.Uint64("offset", offset))
 
 	return r.db.Set(key.Key(), value.Value(), pebble.Sync)
 }

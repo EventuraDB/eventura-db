@@ -18,5 +18,5 @@ func (m *Message) Key() []byte {
 	return utils.UintToBytes(m.ID)
 }
 
-// create func(types.Message) as type ConsumerFunc
-type ConsumerFunc func(Message) error
+// create func(types.Message) as type MessageHandler
+type MessageHandler func(Message) error

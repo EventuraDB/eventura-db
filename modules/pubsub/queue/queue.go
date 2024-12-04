@@ -17,7 +17,7 @@ type FifoQueue struct {
 }
 
 // NewFifoQueue initializes a new FIFO queue with a given prefix.
-func NewFifoQueue(prefix string) (*FifoQueue, error) {
+func NewFifoQueue(prefix string) *FifoQueue {
 	db, _ := pebble.Open(fmt.Sprintf("db/%squeue.db", prefix), &pebble.Options{}) //TODO path
 	q := &FifoQueue{
 		db:     db,
@@ -28,10 +28,10 @@ func NewFifoQueue(prefix string) (*FifoQueue, error) {
 
 	// Load head and tail pointers from the database
 	if err := q.loadPointers(); err != nil {
-		return nil, err
+		return nil
 	}
 
-	return q, nil
+	return q
 }
 
 // Push adds a new item (raw bytes) to the queue.

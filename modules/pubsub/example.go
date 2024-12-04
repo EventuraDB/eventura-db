@@ -1,13 +1,8 @@
 package pubsub
 
-import (
-	"eventura/modules/pubsub/subscription"
-	"eventura/modules/pubsub/types"
-)
+/*func example() {
 
-func example() {
-
-	broker := NewBroker("db/")
+	broker := NewBroker("Db/")
 
 	topic := broker.NewTopic("topic1")
 
@@ -28,3 +23,4 @@ func handle(msg types.Message) error {
 	// Handle message
 	return nil
 }
+*/
