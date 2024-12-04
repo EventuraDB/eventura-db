@@ -1,42 +1,32 @@
 package store
 
 import (
-	_ "encoding/json"
 	"time"
 )
 
 type Metadata struct {
-	Timestamp   time.Time `json:"timestamp"`
-	ContentType string    `json:"content_type"`
-	Map         map[string]string
+	Custom map[string]string
+	Tags   []string
 }
 
-type Event struct {
-	ID       uint64 `json:"id"`
-	Category string `json:"category"`
-	Type     string `json:"type"`
-	Payload  []byte `json:"payload"`
-	Metadata Metadata
+type EventRecord struct {
+	ID        uint64    `json:"id"`
+	Stream    string    `json:"stream"`
+	Type      string    `json:"type"`
+	Event     []byte    `json:"event"`
+	Timestamp time.Time `json:"timestamp"`
+	Metadata  Metadata
 }
 
-func NewEvent(category, eventType string, payload []byte) Event {
-	return Event{
-		Category: category,
-		Type:     eventType,
-		Payload:  payload,
+func NewEventRecord(stream, eventType string, event []byte, tags []string) EventRecord {
+	return EventRecord{
+		Stream:    stream,
+		Type:      eventType,
+		Event:     event,
+		Timestamp: time.Now().UTC(),
 		Metadata: Metadata{
-			Timestamp: time.Now().UTC(),
-			Map:       make(map[string]string),
+			Custom: make(map[string]string),
+			Tags:   tags,
 		},
 	}
-}
-
-type IndexConfig struct {
-	IndexName string
-	EventType string
-	JSONPath  string
-}
-
-type IndexDefinition struct {
-	JSONPath string `json:"json_path"`
 }

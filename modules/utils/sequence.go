@@ -1,4 +1,4 @@
-package store
+package utils
 
 import (
 	"encoding/binary"
@@ -59,8 +59,8 @@ func (sg *SequenceGenerator) FillBuffer() {
 	atomic.StoreInt32(&sg.buffer.index, 0)
 }
 
-// GetNextSequence retrieves the next unique sequence number atomically.
-func (sg *SequenceGenerator) GetNextSequence() uint64 {
+// Next retrieves the next unique sequence number atomically.
+func (sg *SequenceGenerator) Next() uint64 {
 	index := atomic.AddInt32(&sg.buffer.index, 1) - 1
 
 	if int(index) >= len(sg.buffer.buffer) {

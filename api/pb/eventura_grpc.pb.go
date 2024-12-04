@@ -21,10 +21,11 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	EventService_AppendEvent_FullMethodName     = "/eventura.EventService/AppendEvent"
 	EventService_ReadEvent_FullMethodName       = "/eventura.EventService/ReadEvent"
-	EventService_ReadByCategory_FullMethodName  = "/eventura.EventService/ReadByCategory"
+	EventService_ReadByStream_FullMethodName    = "/eventura.EventService/ReadByStream"
 	EventService_ReadByEventType_FullMethodName = "/eventura.EventService/ReadByEventType"
-	EventService_ReadBySubject_FullMethodName   = "/eventura.EventService/ReadBySubject"
+	EventService_ReadByTags_FullMethodName      = "/eventura.EventService/ReadByTags"
 	EventService_ReadAll_FullMethodName         = "/eventura.EventService/ReadAll"
+	EventService_Subscribe_FullMethodName       = "/eventura.EventService/Subscribe"
 )
 
 // EventServiceClient is the client API for EventService service.
@@ -33,10 +34,11 @@ const (
 type EventServiceClient interface {
 	AppendEvent(ctx context.Context, in *AppendEventRequest, opts ...grpc.CallOption) (*AppendEventResponse, error)
 	ReadEvent(ctx context.Context, in *GetEventRequest, opts ...grpc.CallOption) (*GetEventResponse, error)
-	ReadByCategory(ctx context.Context, in *ReadByCategoryRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error)
+	ReadByStream(ctx context.Context, in *ReadByStreamRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error)
 	ReadByEventType(ctx context.Context, in *ReadByEventTypeRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error)
-	ReadBySubject(ctx context.Context, in *ReadBySubjectRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error)
-	ReadAll(ctx context.Context, in *ReadAllRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error)
+	ReadByTags(ctx context.Context, in *ReadByTagsRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error)
+	ReadAll(ctx context.Context, in *ReadAllRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadStreamResponse], error)
+	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeResponse], error)
 }
 
 type eventServiceClient struct {
@@ -67,10 +69,10 @@ func (c *eventServiceClient) ReadEvent(ctx context.Context, in *GetEventRequest,
 	return out, nil
 }
 
-func (c *eventServiceClient) ReadByCategory(ctx context.Context, in *ReadByCategoryRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error) {
+func (c *eventServiceClient) ReadByStream(ctx context.Context, in *ReadByStreamRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReadStreamResponse)
-	err := c.cc.Invoke(ctx, EventService_ReadByCategory_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, EventService_ReadByStream_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -87,25 +89,53 @@ func (c *eventServiceClient) ReadByEventType(ctx context.Context, in *ReadByEven
 	return out, nil
 }
 
-func (c *eventServiceClient) ReadBySubject(ctx context.Context, in *ReadBySubjectRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error) {
+func (c *eventServiceClient) ReadByTags(ctx context.Context, in *ReadByTagsRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ReadStreamResponse)
-	err := c.cc.Invoke(ctx, EventService_ReadBySubject_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, EventService_ReadByTags_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *eventServiceClient) ReadAll(ctx context.Context, in *ReadAllRequest, opts ...grpc.CallOption) (*ReadStreamResponse, error) {
+func (c *eventServiceClient) ReadAll(ctx context.Context, in *ReadAllRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadStreamResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ReadStreamResponse)
-	err := c.cc.Invoke(ctx, EventService_ReadAll_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &EventService_ServiceDesc.Streams[0], EventService_ReadAll_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[ReadAllRequest, ReadStreamResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventService_ReadAllClient = grpc.ServerStreamingClient[ReadStreamResponse]
+
+func (c *eventServiceClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscribeResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &EventService_ServiceDesc.Streams[1], EventService_Subscribe_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[SubscribeRequest, SubscribeResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventService_SubscribeClient = grpc.ServerStreamingClient[SubscribeResponse]
 
 // EventServiceServer is the server API for EventService service.
 // All implementations must embed UnimplementedEventServiceServer
@@ -113,10 +143,11 @@ func (c *eventServiceClient) ReadAll(ctx context.Context, in *ReadAllRequest, op
 type EventServiceServer interface {
 	AppendEvent(context.Context, *AppendEventRequest) (*AppendEventResponse, error)
 	ReadEvent(context.Context, *GetEventRequest) (*GetEventResponse, error)
-	ReadByCategory(context.Context, *ReadByCategoryRequest) (*ReadStreamResponse, error)
+	ReadByStream(context.Context, *ReadByStreamRequest) (*ReadStreamResponse, error)
 	ReadByEventType(context.Context, *ReadByEventTypeRequest) (*ReadStreamResponse, error)
-	ReadBySubject(context.Context, *ReadBySubjectRequest) (*ReadStreamResponse, error)
-	ReadAll(context.Context, *ReadAllRequest) (*ReadStreamResponse, error)
+	ReadByTags(context.Context, *ReadByTagsRequest) (*ReadStreamResponse, error)
+	ReadAll(*ReadAllRequest, grpc.ServerStreamingServer[ReadStreamResponse]) error
+	Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[SubscribeResponse]) error
 	mustEmbedUnimplementedEventServiceServer()
 }
 
@@ -133,17 +164,20 @@ func (UnimplementedEventServiceServer) AppendEvent(context.Context, *AppendEvent
 func (UnimplementedEventServiceServer) ReadEvent(context.Context, *GetEventRequest) (*GetEventResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadEvent not implemented")
 }
-func (UnimplementedEventServiceServer) ReadByCategory(context.Context, *ReadByCategoryRequest) (*ReadStreamResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadByCategory not implemented")
+func (UnimplementedEventServiceServer) ReadByStream(context.Context, *ReadByStreamRequest) (*ReadStreamResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadByStream not implemented")
 }
 func (UnimplementedEventServiceServer) ReadByEventType(context.Context, *ReadByEventTypeRequest) (*ReadStreamResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReadByEventType not implemented")
 }
-func (UnimplementedEventServiceServer) ReadBySubject(context.Context, *ReadBySubjectRequest) (*ReadStreamResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadBySubject not implemented")
+func (UnimplementedEventServiceServer) ReadByTags(context.Context, *ReadByTagsRequest) (*ReadStreamResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReadByTags not implemented")
 }
-func (UnimplementedEventServiceServer) ReadAll(context.Context, *ReadAllRequest) (*ReadStreamResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ReadAll not implemented")
+func (UnimplementedEventServiceServer) ReadAll(*ReadAllRequest, grpc.ServerStreamingServer[ReadStreamResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ReadAll not implemented")
+}
+func (UnimplementedEventServiceServer) Subscribe(*SubscribeRequest, grpc.ServerStreamingServer[SubscribeResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedEventServiceServer) mustEmbedUnimplementedEventServiceServer() {}
 func (UnimplementedEventServiceServer) testEmbeddedByValue()                      {}
@@ -202,20 +236,20 @@ func _EventService_ReadEvent_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
-func _EventService_ReadByCategory_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadByCategoryRequest)
+func _EventService_ReadByStream_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadByStreamRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(EventServiceServer).ReadByCategory(ctx, in)
+		return srv.(EventServiceServer).ReadByStream(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: EventService_ReadByCategory_FullMethodName,
+		FullMethod: EventService_ReadByStream_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EventServiceServer).ReadByCategory(ctx, req.(*ReadByCategoryRequest))
+		return srv.(EventServiceServer).ReadByStream(ctx, req.(*ReadByStreamRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -238,41 +272,45 @@ func _EventService_ReadByEventType_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _EventService_ReadBySubject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadBySubjectRequest)
+func _EventService_ReadByTags_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadByTagsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(EventServiceServer).ReadBySubject(ctx, in)
+		return srv.(EventServiceServer).ReadByTags(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: EventService_ReadBySubject_FullMethodName,
+		FullMethod: EventService_ReadByTags_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EventServiceServer).ReadBySubject(ctx, req.(*ReadBySubjectRequest))
+		return srv.(EventServiceServer).ReadByTags(ctx, req.(*ReadByTagsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _EventService_ReadAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ReadAllRequest)
-	if err := dec(in); err != nil {
-		return nil, err
+func _EventService_ReadAll_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReadAllRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
 	}
-	if interceptor == nil {
-		return srv.(EventServiceServer).ReadAll(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: EventService_ReadAll_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(EventServiceServer).ReadAll(ctx, req.(*ReadAllRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+	return srv.(EventServiceServer).ReadAll(m, &grpc.GenericServerStream[ReadAllRequest, ReadStreamResponse]{ServerStream: stream})
 }
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventService_ReadAllServer = grpc.ServerStreamingServer[ReadStreamResponse]
+
+func _EventService_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(SubscribeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(EventServiceServer).Subscribe(m, &grpc.GenericServerStream[SubscribeRequest, SubscribeResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type EventService_SubscribeServer = grpc.ServerStreamingServer[SubscribeResponse]
 
 // EventService_ServiceDesc is the grpc.ServiceDesc for EventService service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -290,22 +328,29 @@ var EventService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _EventService_ReadEvent_Handler,
 		},
 		{
-			MethodName: "ReadByCategory",
-			Handler:    _EventService_ReadByCategory_Handler,
+			MethodName: "ReadByStream",
+			Handler:    _EventService_ReadByStream_Handler,
 		},
 		{
 			MethodName: "ReadByEventType",
 			Handler:    _EventService_ReadByEventType_Handler,
 		},
 		{
-			MethodName: "ReadBySubject",
-			Handler:    _EventService_ReadBySubject_Handler,
-		},
-		{
-			MethodName: "ReadAll",
-			Handler:    _EventService_ReadAll_Handler,
+			MethodName: "ReadByTags",
+			Handler:    _EventService_ReadByTags_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ReadAll",
+			Handler:       _EventService_ReadAll_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "Subscribe",
+			Handler:       _EventService_Subscribe_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "api/eventura.proto",
 }
