@@ -3,10 +3,10 @@ package pubsy
 import "time"
 
 type TopicMessage struct {
-	ID      uint64
-	Data    []byte
-	Topic   string
-	Created time.Time
+	ID      uint64    `json:"id"`
+	Data    []byte    `json:"data"`
+	Topic   string    `json:"topic"`
+	Created time.Time `json:"created"`
 }
 
 type SubscriptionStatus string
@@ -32,8 +32,9 @@ type Message struct {
 type MessageHandler func(msg *Message) error
 
 type SubscriptionInfo struct {
-	Consumer string
-	Topic    string
-	Created  time.Time
-	Offset   uint64 //offset of the last message consumed
+	Consumer           string
+	Topic              string
+	Created            time.Time
+	LastFetchedOffset  uint64 // offset of the latest message retrieved from the topic
+	LastConsumedOffset uint64 // offset of the latest message fully processed by the consumer
 }

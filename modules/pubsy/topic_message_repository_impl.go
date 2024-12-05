@@ -2,6 +2,7 @@ package pubsy
 
 import (
 	"bytes"
+	"encoding/json"
 	"eventura/modules/utils"
 	"fmt"
 	"github.com/cockroachdb/pebble"
@@ -54,34 +55,43 @@ func (r *TopicMessageRepositoryImpl) Save(topic string, data []byte) (*TopicMess
 		AddUint64(id).
 		Build()
 
-	err = r.db.Set(key, data, pebble.Sync)
+	topicMessage := &TopicMessage{
+		ID:      id,
+		Data:    data,
+		Topic:   topic,
+		Created: time.Now().UTC(),
+	}
+
+	jsonData, err := json.Marshal(topicMessage)
+	if err != nil {
+		r.Log.Error("Error marshalling message", zap.Error(err))
+		return nil, fmt.Errorf("error marshalling message: %w", err)
+	}
+
+	err = r.db.Set(key, jsonData, pebble.Sync)
 	if err != nil {
 		r.Log.Error("Error saving message", zap.Error(err))
 		return nil, fmt.Errorf("error saving message: %w", err)
 	}
 
-	err = r.createMessageTimestampIndex(id, topic)
+	err = r.createMessageTimestampIndex(topicMessage)
 	if err != nil {
 		r.Log.Error("Error creating message timestamp index", zap.Error(err))
 		return nil, fmt.Errorf("error creating message timestamp index: %w", err)
 
 	}
 
-	return &TopicMessage{
-		ID:    id,
-		Data:  data,
-		Topic: topic,
-	}, nil
+	return topicMessage, nil
 }
 
 // createMessageTimestampIndex creates an index for the message timestamp so that we can query messages by timestamp
-func (r *TopicMessageRepositoryImpl) createMessageTimestampIndex(id uint64, topic string) error {
+func (r *TopicMessageRepositoryImpl) createMessageTimestampIndex(topicMessage *TopicMessage) error {
 	key := utils.NewCompositeKey(INDEX_MESSAGE_TIMESTAMP).
-		AddUint64(uint64(time.Now().UnixNano())).
-		AddString(topic).
+		AddUint64(uint64(topicMessage.Created.UnixNano())).
+		AddString(topicMessage.Topic).
 		Build()
 
-	err := r.db.Set(key, utils.UintToBytes(id), pebble.Sync)
+	err := r.db.Set(key, utils.UintToBytes(topicMessage.ID), pebble.Sync)
 
 	if err != nil {
 		r.Log.Error("Error creating message timestamp index", zap.Error(err))
@@ -91,7 +101,6 @@ func (r *TopicMessageRepositoryImpl) createMessageTimestampIndex(id uint64, topi
 }
 
 func (r *TopicMessageRepositoryImpl) GetMessagesFromOffset(topic string, offset uint64, limit uint64) (*[]TopicMessage, error) {
-
 	lowerBound := utils.NewCompositeKey(KEY_SPACE).
 		AddString(topic).
 		AddUint64(offset).
@@ -106,37 +115,34 @@ func (r *TopicMessageRepositoryImpl) GetMessagesFromOffset(topic string, offset 
 		LowerBound: lowerBound,
 		UpperBound: upperBound,
 	})
-
 	if err != nil {
 		r.Log.Error("Error getting messages from offset", zap.Error(err))
 		return nil, fmt.Errorf("error getting messages from offset: %w", err)
 	}
+	defer iter.Close()
+
+	var messages []TopicMessage
 	count := uint64(0)
-	var messages = make([]TopicMessage, 0)
-	for iter.First(); iter.Valid() && count <= limit; iter.Next() {
-		count++
+
+	for valid := iter.First(); valid && iter.Valid(); valid = iter.Next() {
+		if count >= limit {
+			break
+		}
+
 		data, err := iter.ValueAndErr()
 		if err != nil {
 			r.Log.Error("Error getting message data", zap.Error(err))
 			return nil, fmt.Errorf("error getting message data: %w", err)
 		}
-		ck := utils.NewCompositeKey(KEY_SPACE)
-		ck.Parse(iter.Key())
-		topic, err := ck.GetString()
-		offset, err := ck.GetUint64()
-		if err != nil {
-			r.Log.Error("Error parsing key", zap.Error(err))
-			return nil, fmt.Errorf("error parsing key: %w", err)
+
+		var tm TopicMessage
+		if err := json.Unmarshal(data, &tm); err != nil {
+			r.Log.Error("Error unmarshalling JSON message", zap.Error(err))
+			return nil, fmt.Errorf("error unmarshalling JSON message: %w", err)
 		}
-		messages = append(messages, TopicMessage{
-			ID:      offset,
-			Data:    data,
-			Topic:   topic,
-			Created: time.Now(),
-		})
-		if uint64(len(messages)) >= limit {
-			break
-		}
+
+		messages = append(messages, tm)
+		count++
 	}
 
 	return &messages, nil
