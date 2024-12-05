@@ -97,14 +97,14 @@ func TestEventStoreWithSubscriptions(t *testing.T) {
 		store.NewEventRecord("test-stream-2", "TypeB", []byte(`{"field":"valueB"}`), []string{"example"}),
 	}
 
-	// Create subscriptions for subscription groups
-	subscription, _ := es.Subscribe("subscription-group-1")
-	subscription2, _ := es.Subscribe("subscription-group-2")
+	// Create subscriptions for subscription_ groups
+	subscription, _ := es.Subscribe("subscription_-group-1")
+	subscription2, _ := es.Subscribe("subscription_-group-2")
 
-	assert.NotNil(t, subscription, "Subscription for subscription-group-1 should exist")
-	assert.NotNil(t, subscription2, "Subscription for subscription-group-2 should exist")
+	assert.NotNil(t, subscription, "Subscription for subscription_-group-1 should exist")
+	assert.NotNil(t, subscription2, "Subscription for subscription_-group-2 should exist")
 
-	// Start a goroutine to listen to the first subscription
+	// Start a goroutine to listen to the first subscription_
 	receivedEvents := make(chan store.EventRecord, len(events))
 	go func() {
 		for event := range subscription.Listen() {
@@ -112,7 +112,7 @@ func TestEventStoreWithSubscriptions(t *testing.T) {
 		}
 	}()
 
-	// Start a goroutine to listen to the second subscription
+	// Start a goroutine to listen to the second subscription_
 	receivedEventsFor2 := make(chan store.EventRecord, len(events))
 	go func() {
 		for event := range subscription2.Listen() {
@@ -133,8 +133,8 @@ func TestEventStoreWithSubscriptions(t *testing.T) {
 	// Allow time for goroutines to process events
 	time.Sleep(200 * time.Millisecond)
 
-	// Verify the received events for the first subscription
-	assert.Len(t, receivedEvents, len(events), "All events should be received by subscription 1")
+	// Verify the received events for the first subscription_
+	assert.Len(t, receivedEvents, len(events), "All events should be received by subscription_ 1")
 	for _, expectedEvent := range events {
 		receivedEvent := <-receivedEvents
 		assert.Equal(t, expectedEvent.Stream, receivedEvent.Stream, "Stream mismatch")
@@ -143,8 +143,8 @@ func TestEventStoreWithSubscriptions(t *testing.T) {
 		assert.ElementsMatch(t, expectedEvent.Metadata.Tags, receivedEvent.Metadata.Tags, "Metadata tags mismatch")
 	}
 
-	// Verify the received events for the second subscription
-	assert.Len(t, receivedEventsFor2, len(events), "All events should be received by subscription 2")
+	// Verify the received events for the second subscription_
+	assert.Len(t, receivedEventsFor2, len(events), "All events should be received by subscription_ 2")
 	for _, expectedEvent := range events {
 		receivedEvent := <-receivedEventsFor2
 		assert.Equal(t, expectedEvent.Stream, receivedEvent.Stream, "Stream mismatch")

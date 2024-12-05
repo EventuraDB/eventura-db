@@ -39,13 +39,13 @@ func (es *PebbleEventStore) GetSubscriptions() map[string]*store.Subscription {
 
 	if es.subscriptions[consumerGroup] != nil {
 		es.log.Info("Subscription is active", zap.String("consumerGroup", consumerGroup))
-		return nil, errors.New("subscription is active")
+		return nil, errors.New("subscription_ is active")
 	}
 	var sub *store.Subscription
-	offset, closer, err := es.db.Get([]byte(fmt.Sprintf("subscription:%s", consumerGroup)))
+	offset, closer, err := es.db.Get([]byte(fmt.Sprintf("subscription_:%s", consumerGroup)))
 	if errors.Is(err, pebble.ErrNotFound) {
-		// No subscription offset found, start from the beginning
-		es.db.Set([]byte(fmt.Sprintf("subscription:%s", consumerGroup)), []byte("0"), nil)
+		// No subscription_ offset found, start from the beginning
+		es.db.Set([]byte(fmt.Sprintf("subscription_:%s", consumerGroup)), []byte("0"), nil)
 		sub = store.NewSubscription(consumerGroup, 0, es.log)
 		es.subscriptions[consumerGroup] = sub
 		return sub, nil
@@ -128,7 +128,7 @@ func (es *PebbleEventStore) Acknowledge(consumerGroup string, eventID uint64) er
 	es.subAckMutex.Lock()
 	defer es.subAckMutex.Unlock()
 
-	err := es.db.Set([]byte(fmt.Sprintf("subscription:%s", consumerGroup)), []byte(fmt.Sprintf("%d", eventID)), nil)
+	err := es.db.Set([]byte(fmt.Sprintf("subscription_:%s", consumerGroup)), []byte(fmt.Sprintf("%d", eventID)), nil)
 	if err != nil {
 		es.log.Error("Failed to acknowledge event", zap.String("consumerGroup", consumerGroup), zap.Uint64("eventID", eventID))
 		return fmt.Errorf("failed to acknowledge event: %w", err)

@@ -100,7 +100,7 @@ func (s *EventStoreServer) Subscribe(req *pb.SubscribeRequest, stream pb.EventSe
 
 	// Validate request
 	if req.ConsumerGroup == "" {
-		err := fmt.Errorf("subscription MessageID cannot be empty")
+		err := fmt.Errorf("subscription_ MessageID cannot be empty")
 		log.Printf("Validation failed for Subscribe request: %v", err)
 		return err
 	}
@@ -133,7 +133,7 @@ log.Printf("Received SubscribeStream request (ConsumerID: %s)", request.Consumer
 
 // Validate request
 if request.ConsumerId == "" {
-	err := fmt.Errorf("subscription MessageID cannot be empty")
+	err := fmt.Errorf("subscription_ MessageID cannot be empty")
 	log.Printf("Validation failed for SubscribeStream request: %v", err)
 	return err
 }
@@ -141,7 +141,7 @@ if request.ConsumerId == "" {
 // Channel to handle events asynchronously
 eventChan := make(chan *pb.EventRecord, 100) // Buffered channel to avoid blocking
 
-// Start the subscription in a separate goroutine
+// Start the subscription_ in a separate goroutine
 go func() {
 	defer close(eventChan)
 	err := s.store.SubscribeAll(stream.Context(), request.ConsumerId, func(event *EventRecord) error {
