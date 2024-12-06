@@ -1,6 +1,9 @@
-package pubsy
+package core
 
-import "time"
+import (
+	"github.com/google/uuid"
+	"time"
+)
 
 type TopicMessage struct {
 	ID      uint64    `json:"id"`
@@ -15,6 +18,8 @@ const (
 	SubscriptionStatusNew      SubscriptionStatus = "new"
 	SubscriptionStatusPending  SubscriptionStatus = "pending"
 	SubscriptionStatusConsumed SubscriptionStatus = "consumed"
+	SubscriptionStatusRetry    SubscriptionStatus = "retry"
+	SubscriptionStatusFailed   SubscriptionStatus = "failed"
 )
 
 type SubscriptionMessage struct {
@@ -26,12 +31,14 @@ type SubscriptionMessage struct {
 }
 
 type Message struct {
-	ID uint64
+	ID   uint64
+	Data []byte
 }
 
 type MessageHandler func(msg *Message) error
 
 type SubscriptionInfo struct {
+	ID                 uuid.UUID
 	Consumer           string
 	Topic              string
 	Created            time.Time

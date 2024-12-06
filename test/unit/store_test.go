@@ -104,7 +104,7 @@ func TestEventStoreWithSubscriptions(t *testing.T) {
 	assert.NotNil(t, subscription, "Subscription for subscription_-group-1 should exist")
 	assert.NotNil(t, subscription2, "Subscription for subscription_-group-2 should exist")
 
-	// Start a goroutine to listen to the first subscription_
+	// start a goroutine to listen to the first subscription_
 	receivedEvents := make(chan store.EventRecord, len(events))
 	go func() {
 		for event := range subscription.Listen() {
@@ -112,7 +112,7 @@ func TestEventStoreWithSubscriptions(t *testing.T) {
 		}
 	}()
 
-	// Start a goroutine to listen to the second subscription_
+	// start a goroutine to listen to the second subscription_
 	receivedEventsFor2 := make(chan store.EventRecord, len(events))
 	go func() {
 		for event := range subscription2.Listen() {

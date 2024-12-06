@@ -202,7 +202,7 @@ func (es *PebbleEventStore) GetEventByID(eventID uint64) (*store.EventRecord, er
 }
 
 func (es *PebbleEventStore) AppendEvent(event store.EventRecord) (uint64, error) {
-	// Start batch
+	// start batch
 	batch := es.db.NewIndexedBatch()
 	defer utils.HandleAndLog(batch.Close, es.log)
 

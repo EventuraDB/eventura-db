@@ -1,11 +1,12 @@
-package pubsy
+package core
 
 import (
+	"github.com/google/uuid"
 	"time"
 )
 
-type Broker interface {
-	Topic(name string) *Topic
+type Pubsy interface {
+	Topic(name string) Topic
 }
 
 type Topic interface {
@@ -13,7 +14,7 @@ type Topic interface {
 	Subscribe(consumer string, handle MessageHandler) (Subscription, error)
 }
 
-type TopicMessageRepository interface {
+type TopicRepository interface {
 	Save(topic string, data []byte) (*TopicMessage, error)
 	GetMessagesFromOffset(topic string, offset uint64, limit uint64) (*[]TopicMessage, error)
 	GetMessage(topic string, id uint64) (*TopicMessage, error)
@@ -26,9 +27,14 @@ type Subscription interface {
 	Stop() error
 }
 
-type SubscriptionMessageRepository interface {
-	Save(message *SubscriptionMessage) error
-	GetMessagesFromOffsetByStatus(topic string, consumer string, status SubscriptionStatus, offset uint64, limit uint64) (*[]SubscriptionMessage, error)
+type SubscriptionRepository interface {
+	InsertSubscriptionInfo(info *SubscriptionInfo) error
+	GetSubscriptionInfo(ID uuid.UUID) (*SubscriptionInfo, error)
+	FindSubscriptionInfoByTopicAndConsumer(topic string, consumer string) (*SubscriptionInfo, error)
+	UpdateSubscriptionConsumedOffset(ID uuid.UUID, offset uint64) error
+	InsertSubscriptionMessage(message *SubscriptionMessage) error
+	ConsumeMessagesFromConsumedOffsetByStatus(topic string, consumer string, status SubscriptionStatus, offset uint64, limit uint64) (*[]SubscriptionMessage, error)
+	UpdateSubscriptionMessageStatus(topic string, id uint64, status SubscriptionStatus) error
 }
 
 type TopicService interface {
@@ -39,6 +45,6 @@ type TopicService interface {
 }
 
 type SubscriptionService interface {
-	GetMessagesFromOffsetByStatus(topic string, consumer string, status SubscriptionStatus, offset uint64, limit uint64) (*[]SubscriptionMessage, error)
+	GetMessagesFromConsumedOffsetByStatus(topic string, consumer string, status SubscriptionStatus, consumedOffset uint64, limit uint64) (*[]SubscriptionMessage, error)
 	RegisterConsumer(topic string, consumer string) Subscription
 }

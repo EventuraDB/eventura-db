@@ -1,34 +1,22 @@
 package test
 
 import (
-	"eventura/modules/pubsy"
+	"encoding/json"
+	"eventura/modules/pubsy/core"
+	"eventura/modules/pubsy/internal"
 	"eventura/modules/utils"
 	"fmt"
 	"github.com/cockroachdb/pebble"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
-	"os"
 	"testing"
 	"time"
 )
 
-func setupTestDb() (*pebble.DB, func()) {
-	db, err := pebble.Open("temp/db", &pebble.Options{})
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create test Pebble DB: %v", err))
-	}
-	return db, func() {
-		db.Close()
-		os.RemoveAll("temp/db")
-
-	}
-}
-
-func setupDependency(db *pebble.DB) *pubsy.DbAwareDependency {
+func setupDependency(db *pebble.DB) (*pebble.DB, *zap.Logger) {
 	logger, _ := zap.NewDevelopment()
-	base := pubsy.NewBaseDependency(logger)
-	dep := pubsy.NewDbAwareDependency(&base, db)
-	return &dep
+	return db, logger
 }
 
 func TestGetLastMessageID(t *testing.T) {
@@ -36,7 +24,7 @@ func TestGetLastMessageID(t *testing.T) {
 	db, cleanup := setupTestDb()
 	defer cleanup()
 
-	repo := pubsy.NewTopicMessageRepositoryImpl(setupDependency(db))
+	repo := internal.NewTopicRepositoryImpl(setupDependency(db))
 	topic := "test-topic"
 
 	// Insert test data
@@ -62,7 +50,7 @@ func TestGetLastMessageID_NoMessages(t *testing.T) {
 	db, cleanup := setupTestDb()
 	defer cleanup()
 
-	repo := pubsy.NewTopicMessageRepositoryImpl(setupDependency(db))
+	repo := internal.NewTopicRepositoryImpl(setupDependency(db))
 	topic := "empty-topic"
 
 	// Act
@@ -73,31 +61,42 @@ func TestGetLastMessageID_NoMessages(t *testing.T) {
 }
 
 func TestSave(t *testing.T) {
-	// Arrange
-	db, cleanup := setupTestDb()
-	defer cleanup()
+	db, err := pebble.Open("testdb", &pebble.Options{})
+	require.NoError(t, err)
+	defer db.Close()
 
-	repo := pubsy.NewTopicMessageRepositoryImpl(setupDependency(db))
+	logger, _ := zap.NewDevelopment()
+	repo := internal.NewTopicRepositoryImpl(db, logger)
+
 	topic := "test-topic"
+	data := []byte("test-message")
 
-	// Act
-	msg, err := repo.Save(topic, []byte("test-message"))
+	topicMessage, err := repo.Save(topic, data)
+	require.NoError(t, err)
 
-	// Assert
-	assert.NoError(t, err)
-	assert.NotNil(t, msg)
-	assert.Equal(t, topic, msg.Topic)
-	assert.Equal(t, []byte("test-message"), msg.Data)
-	assert.Greater(t, msg.ID, uint64(0))
+	// Construct the expected TopicMessage
+	expectedMessage := &core.TopicMessage{
+		ID:      topicMessage.ID, // Use returned ID to ensure consistency
+		Data:    data,
+		Topic:   topic,
+		Created: topicMessage.Created, // Use returned timestamp
+	}
 
-	// Verify the saved message using GetMessage
-	storedMsg, err := repo.GetMessage(topic, msg.ID)
-	assert.NoError(t, err)
-	assert.NotNil(t, storedMsg)
-	assert.Equal(t, msg.ID, storedMsg.ID)
-	assert.Equal(t, msg.Topic, storedMsg.Topic)
-	assert.Equal(t, msg.Data, storedMsg.Data)
+	expectedJSON, err := json.Marshal(expectedMessage)
+	require.NoError(t, err)
 
+	// Retrieve the stored data
+	key := utils.NewCompositeKey(internal.KEY_SPACE).
+		AddString(topic).
+		AddUint64(topicMessage.ID).
+		Build()
+
+	storedData, closer, err := db.Get(key)
+	require.NoError(t, err)
+	defer closer.Close()
+
+	// Assert stored data matches expected JSON
+	assert.Equal(t, expectedJSON, storedData)
 }
 
 func TestGetMessagesFromOffset(t *testing.T) {
@@ -105,106 +104,106 @@ func TestGetMessagesFromOffset(t *testing.T) {
 	db, cleanup := setupTestDb()
 	defer cleanup()
 
-	repo := pubsy.NewTopicMessageRepositoryImpl(setupDependency(db))
+	repo := internal.NewTopicRepositoryImpl(setupDependency(db))
 	topic := "test-topic"
 
 	// Insert test messages
 	start := time.Now()
 	for i := 1; i <= 55; i++ {
 		_, err := repo.Save(topic, []byte(fmt.Sprintf("message-%d", i)))
-		assert.NoError(t, err)
+		require.NoError(t, err, "Failed to save message %d", i)
 	}
-	fmt.Printf("Inserting 550 messages took: %v\n", time.Since(start))
+	fmt.Printf("Inserting 55 messages took: %v\n", time.Since(start))
+
+	t.Run("GetMessagesFromOffset_ValidOffset", func(t *testing.T) {
+		startReading := time.Now()
+		messages, err := repo.GetMessagesFromOffset(topic, 40, 15)
+		fmt.Printf("Reading 15 messages took: %v\n", time.Since(startReading))
+
+		// Assert
+		require.NoError(t, err, "GetMessagesFromOffset should not return an error")
+		require.NotNil(t, messages, "Messages should not be nil")
+		assert.Equal(t, 15, len(*messages), "Expected to fetch 15 messages starting from offset 40")
+
+		// Adjust expectations for inclusive offset
+		for i, msg := range *messages {
+			expectedMessage := fmt.Sprintf("message-%d", 40+i)
+			assert.Equal(t, expectedMessage, string(msg.Data), "Message data does not match")
+			assert.Equal(t, topic, msg.Topic, "Message topic does not match")
+		}
+	})
 
 	t.Run("GetMessagesFromOffset_InvalidOffset", func(t *testing.T) {
 		startReading := time.Now()
-		messages, err := repo.GetMessagesFromOffset(topic, 40, 55)
-		fmt.Printf("Reading 55 messages took: %v\n", time.Since(startReading))
+		messages, err := repo.GetMessagesFromOffset(topic, 100, 10)
+		fmt.Printf("Reading messages with invalid offset took: %v\n", time.Since(startReading))
 
 		// Assert
-		assert.NoError(t, err)
-		assert.NotEmpty(t, messages)
-		assert.NotNil(t, messages)
-		assert.Equal(t, 16, len(*messages))
-
+		require.NoError(t, err, "GetMessagesFromOffset should not return an error")
+		require.NotNil(t, messages, "Messages should not be nil")
+		assert.Equal(t, 0, len(*messages), "Expected no messages to be returned for offset 100")
 	})
 
 	dumpDb(db)
-
 }
 
 func TestDeleteMessagesOlderThan(t *testing.T) {
-	db, cleanup := setupTestDb()
-	defer cleanup()
+	// Setup test database and cleanup
+	db, err := pebble.Open("testdb", &pebble.Options{})
+	require.NoError(t, err)
+	defer func() {
+		_ = db.Close()
+	}()
 
-	// Create the repository implementation
-	repo := pubsy.NewTopicMessageRepositoryImpl(setupDependency(db))
+	logger, _ := zap.NewDevelopment()
+	repo := internal.NewTopicRepositoryImpl(db, logger)
 
 	topic := "testTopic"
 
-	// Insert first message (older)
+	// Insert the first message (older)
 	data1 := []byte("Older message")
 	msg1, err := repo.Save(topic, data1)
-	if err != nil {
-		t.Fatalf("Failed to save first message: %v", err)
-	}
+	require.NoError(t, err, "Failed to save first message")
 
 	// Wait 1 second to ensure a time difference
 	time.Sleep(1 * time.Second)
 
-	// Insert second message (newer)
+	// Insert the second message (newer)
 	data2 := []byte("Newer message")
 	msg2, err := repo.Save(topic, data2)
-	if err != nil {
-		t.Fatalf("Failed to save second message: %v", err)
-	}
+	require.NoError(t, err, "Failed to save second message")
 
-	// Now, define a duration shorter than the difference between the two inserts.
-	// The first message is older by about 1 second, so deleting older than 500ms should remove it.
+	// Define a duration shorter than the time difference between the two inserts
 	duration := 500 * time.Millisecond
 
-	// Delete messages older than 'duration'.
+	// Delete messages older than the specified duration
 	count, delErr := repo.DeleteMessagesOlderThan(topic, duration)
-	if delErr != nil {
-		t.Fatalf("DeleteMessagesOlderThan failed: %v", delErr)
-	}
+	require.NoError(t, delErr, "DeleteMessagesOlderThan failed")
 
+	// Validate the deletion count
 	assert.Equal(t, uint64(1), count, "Expected 1 message to be deleted")
 
 	// Verify that the older message no longer exists
-	_, closer, err := db.Get(utils.NewCompositeKey(pubsy.KEY_SPACE).
+	_, closer, err := db.Get(utils.NewCompositeKey(internal.KEY_SPACE).
 		AddString(topic).
 		AddUint64(msg1.ID).
 		Build())
 	if closer != nil {
-		closer.Close()
+		_ = closer.Close()
 	}
 	assert.Error(t, err, "Older message should have been deleted")
 
 	// Verify that the newer message still exists
-	val, closer, err := db.Get(utils.NewCompositeKey(pubsy.KEY_SPACE).
+	val, closer, err := db.Get(utils.NewCompositeKey(internal.KEY_SPACE).
 		AddString(topic).
 		AddUint64(msg2.ID).
 		Build())
 	if err != nil {
 		t.Fatalf("Expected newer message to still exist, got error: %v", err)
 	}
-	assert.Equal(t, data2, val, "Newer message should still be present and match original data")
+	assert.NotNil(t, val, "Expected value for newer message to exist")
+	assert.JSONEq(t, string(data2), string(val), "Newer message should still be present and match original data")
 	if closer != nil {
-		closer.Close()
-	}
-
-	fmt.Println("TestDeleteMessagesOlderThan passed successfully.")
-}
-
-// dumpDb prints all keys and values from the provided Pebble database.
-func dumpDb(db *pebble.DB) {
-	iter, _ := db.NewIter(nil)
-	defer iter.Close()
-
-	for valid := iter.First(); valid; valid = iter.Next() {
-		key := iter.Key()
-		value := iter.Value()
-		fmt.Printf("Database dump - Key: %s, Value: %s\n", key, value)
+		_ = closer.Close()
 	}
 }

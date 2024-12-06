@@ -141,7 +141,7 @@ if request.ConsumerId == "" {
 // Channel to handle events asynchronously
 eventChan := make(chan *pb.EventRecord, 100) // Buffered channel to avoid blocking
 
-// Start the subscription_ in a separate goroutine
+// start the subscription_ in a separate goroutine
 go func() {
 	defer close(eventChan)
 	err := s.store.SubscribeAll(stream.Context(), request.ConsumerId, func(event *EventRecord) error {
